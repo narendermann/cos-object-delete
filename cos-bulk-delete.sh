@@ -14,13 +14,13 @@ umask 077
 #
 # Usage:
 #   ./cos-bulk-delete.sh \
-#       --bucket bucket-conair-pvsibmi-uss \
+#       --bucket bucket-demo \
 #       --region us-south \
 #       --execute
 #
 # Dry run:
 #   ./cos-bulk-delete.sh \
-#       --bucket bucket-conair-pvsibmi-uss \
+#       --bucket bucket-demo \
 #       --region us-south
 #
 # Optional:
@@ -62,18 +62,18 @@ Options:
 Examples:
   # Dry run
   ./cos-bulk-delete.sh \
-      --bucket bucket-conair-pvsibmi-uss \
+      --bucket bucket-demo \
       --region us-south
 
   # Delete all current objects
   ./cos-bulk-delete.sh \
-      --bucket bucket-conair-pvsibmi-uss \
+      --bucket bucket-demo \
       --region us-south \
       --execute
 
   # Resume an interrupted run
   ./cos-bulk-delete.sh \
-      --bucket bucket-conair-pvsibmi-uss \
+      --bucket bucket-demo \
       --region us-south \
       --state-dir ./cos-delete-state \
       --resume \

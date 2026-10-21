@@ -11,8 +11,6 @@ This implementation is intended for a bucket such as:
 - **Approximate object count:** `7,070,000`
 - **Estimated listing pages at 1,000 keys per batch:** approximately `7,070`
 
-At this scale, a per-object command such as `ibmcloud cos object-delete` in a loop is not recommended. The implementation instead uses:
-
 1. `ibmcloud cos list-objects-v2` to list a bounded page of keys.
 2. A JSON payload containing up to 1,000 keys.
 3. `ibmcloud cos objects-delete` for multi-object deletion.
@@ -22,40 +20,7 @@ At this scale, a per-object command such as `ibmcloud cos object-delete` in a lo
 
 > **Destructive operation:** Object deletion is irreversible unless another retained copy or recoverable object version exists. Validate the target account, COS instance, bucket, location, prefix, retention settings, and backup requirements before using `--execute`.
 
-## 2. Why the earlier command failed
-
-The following command is invalid:
-
-```bash
-ibmcloud cos objects-delete \
-  --bucket bucket-demo \
-  --delete \
-  --region us-south
-```
-
-`--delete` is not a Boolean flag. It requires a JSON structure, for example:
-
-```json
-{
-  "Objects": [
-    {"Key": "path/object-1.txt"},
-    {"Key": "path/object-2.txt"}
-  ],
-  "Quiet": true
-}
-```
-
-The JSON can be supplied from a file:
-
-```bash
-ibmcloud cos objects-delete \
-  --bucket bucket-demo \
-  --delete file://delete-payload.json \
-  --region us-south \
-  --output json
-```
-
-## 3. Design summary
+## 2. Design summary
 
 The script processes one page at a time:
 
@@ -70,9 +35,9 @@ The script processes one page at a time:
 
 This design limits local memory consumption because it never attempts to hold all 7.07 million keys at once.
 
-## 4. Prerequisites
+## 3. Prerequisites
 
-### 4.1 Required software
+### 3.1 Required software
 
 - A supported Linux or Unix-like shell with Bash.
 - IBM Cloud CLI.
@@ -95,7 +60,7 @@ Install the COS plug-in if required:
 ibmcloud plugin install cloud-object-storage
 ```
 
-### 4.2 Authentication
+### 3.2 Authentication
 
 For an interactive session:
 
@@ -111,7 +76,7 @@ ibmcloud login --apikey "$IBMCLOUD_API_KEY"
 
 Do not place an API key directly in the script, source repository, shell history, log output, or command-line argument visible to other users.
 
-### 4.3 IAM access
+### 3.3 IAM access
 
 The identity executing the script must be able to:
 
@@ -122,9 +87,9 @@ The identity executing the script must be able to:
 
 Full permissions do not by themselves guarantee that the CLI is targeting the correct account or COS service instance. Confirm the current target and the COS plug-in configuration before deletion.
 
-## 5. Preflight validation
+## 4. Preflight validation
 
-### 5.1 Verify the IBM Cloud target
+### 4.1 Verify the IBM Cloud target
 
 ```bash
 ibmcloud target
@@ -132,7 +97,7 @@ ibmcloud target
 
 Confirm the account and resource group are correct.
 
-### 5.2 Review COS CLI configuration
+### 4.2 Review COS CLI configuration
 
 ```bash
 ibmcloud cos config list
@@ -145,7 +110,7 @@ Review at least:
 - Default region
 - URL style
 
-### 5.3 Confirm that the bucket exists and is reachable
+### 4.3 Confirm that the bucket exists and is reachable
 
 ```bash
 ibmcloud cos bucket-head \
@@ -154,7 +119,7 @@ ibmcloud cos bucket-head \
   --output json
 ```
 
-### 5.4 Confirm the bucket location
+### 4.4 Confirm the bucket location
 
 ```bash
 ibmcloud cos bucket-location-get \
@@ -163,7 +128,7 @@ ibmcloud cos bucket-location-get \
 
 Use the actual returned location if it differs from `us-south`.
 
-### 5.5 Test a bounded listing
+### 4.5 Test a bounded listing
 
 ```bash
 ibmcloud cos list-objects-v2 \
@@ -176,7 +141,7 @@ ibmcloud cos list-objects-v2 \
 
 Do not begin deletion until this command returns the expected object keys.
 
-### 5.6 Capture current bucket controls
+### 4.6 Capture current bucket controls
 
 Before deletion, review and save relevant configuration:
 
@@ -194,7 +159,7 @@ ibmcloud cos bucket-lifecycle-configuration-get \
 
 Also confirm whether Object Lock, legal hold, governance retention, replication, archive workflows, or application dependencies apply. Retention-protected objects may fail deletion until their controls permit it.
 
-## 6. Script installation
+## 5. Script installation
 
 Save the supplied script as:
 
@@ -220,7 +185,7 @@ Optional static analysis, if ShellCheck is available:
 shellcheck cos-bulk-delete.sh
 ```
 
-## 7. Usage
+## 6. Usage
 
 ```text
 cos-bulk-delete.sh --bucket BUCKET --region REGION [options]
@@ -241,7 +206,7 @@ Optional arguments:
 - `--execute`: Perform deletion. Without this flag, the script runs in dry-run mode.
 - `--help`: Display usage help.
 
-## 8. Recommended execution workflow
+## 7. Recommended execution workflow
 
 ### Step 1: Stop or control writers
 
@@ -313,7 +278,7 @@ Use the same bucket, location, prefix, and state directory:
 
 Do not change the prefix or target while reusing an existing checkpoint.
 
-## 9. State and log files
+## 8. State and log files
 
 The state directory contains:
 
@@ -326,7 +291,7 @@ The state directory contains:
 
 Protect this directory because object names may contain business-sensitive information.
 
-## 10. Retry behavior
+## 9. Retry behavior
 
 The script retries failed CLI list and delete calls with exponential backoff:
 
@@ -343,7 +308,7 @@ There are two failure layers:
 
 Persistent failures are appended to `failed-keys.jsonl`, and the script exits without advancing the checkpoint past the failed page.
 
-## 11. Important pagination and checkpoint considerations
+## 10. Important pagination and checkpoint considerations
 
 - The list operation is intentionally limited to one deletion-sized batch.
 - The script stores the next token only after successfully processing the current page.
@@ -358,7 +323,7 @@ Deleting objects while traversing a changing key set can be sensitive to service
 
 If a pass ends with objects remaining, run a new deletion pass with a new state directory after confirming that no writers are recreating objects.
 
-## 12. Versioning, delete markers, and retained versions
+## 11. Versioning, delete markers, and retained versions
 
 The base script targets **current objects returned by `list-objects-v2`**.
 
@@ -380,7 +345,7 @@ ibmcloud cos bucket-versioning-get \
 
 Do not claim that the bucket is physically empty based only on a current-object listing when versioning is enabled.
 
-## 13. Retention, governance, and legal hold
+## 12. Retention, governance, and legal hold
 
 Deletion can fail for an object protected by retention, compliance controls, governance mode, or legal hold. Do not automatically bypass these controls.
 
@@ -393,7 +358,7 @@ The COS CLI exposes `--bypass-governance-retention` for applicable operations, b
 
 The supplied script does not enable bypass by default.
 
-## 14. Lifecycle expiration alternative
+## 13. Lifecycle expiration alternative
 
 For non-immediate cleanup, a lifecycle expiration rule may be operationally simpler than an active deletion client. IBM documents expiration as an option for emptying a bucket and notes that versioned buckets can create delete markers when expiration rules act on objects.
 
@@ -411,7 +376,7 @@ Use the paginated deletion script when:
 - You need prefix-scoped cleanup.
 - You need direct visibility into per-object failures.
 
-## 15. Monitoring during execution
+## 14. Monitoring during execution
 
 Watch the log:
 
@@ -440,9 +405,9 @@ wc -l ./state-bucket-demo/failed-keys.jsonl
 
 Avoid aggressive parallelization. It can increase throttling, complicate checkpoint management, and make error reconciliation more difficult. Begin with one worker and 1,000-key batches.
 
-## 16. Post-deletion verification
+## 15. Post-deletion verification
 
-### 16.1 Re-run a current-object listing
+### 15.1 Re-run a current-object listing
 
 ```bash
 ibmcloud cos list-objects-v2 \
@@ -455,15 +420,15 @@ ibmcloud cos list-objects-v2 \
 
 Verify that no unexpected current objects remain.
 
-### 16.2 Check for ongoing writers
+### 15.2 Check for ongoing writers
 
 If objects reappear, inspect application jobs, backup schedules, transfer processes, IBM i/AIX automation, and service credentials that can write to the bucket.
 
-### 16.3 Check versions separately
+### 15.3 Check versions separately
 
 If versioning is enabled, inventory object versions and delete markers before concluding that storage has been reclaimed or the bucket can be deleted.
 
-### 16.4 Review errors and logs
+### 15.4 Review errors and logs
 
 ```bash
 cat ./state-bucket-demo/delete.log
@@ -474,11 +439,11 @@ jq -s '.' \
 
 Retain logs according to the organization's change-management and audit requirements.
 
-### 16.5 Delete the bucket only if intended
+### 15.5 Delete the bucket only if intended
 
 Bucket deletion is separate from object deletion. Do not delete the bucket unless the change scope explicitly requires it and all current objects, versions, delete markers, retention constraints, and dependent integrations have been addressed.
 
-## 17. Troubleshooting
+## 16. Troubleshooting
 
 ### `Unexpected number of arguments in command 'objects-delete'`
 
@@ -547,7 +512,7 @@ Look for retention, legal hold, malformed key handling, authorization, endpoint,
 - Upgrade the IBM Cloud CLI/COS plug-in through the approved change process.
 - Check `ibmcloud cos <command> --help` because command flags can differ by plug-in version.
 
-## 18. Security and governance recommendations
+## 17. Security and governance recommendations
 
 - Use a dedicated IBM Cloud service ID for automation.
 - Apply least privilege scoped to the required COS resources.
@@ -562,7 +527,7 @@ Look for retention, legal hold, malformed key handling, authorization, endpoint,
 - Use a dry run and, where possible, a prefix-scoped test.
 - Require a second-person review of the final command for production.
 
-## 19. Operational recommendations for this 7.07-million-object bucket
+## 18. Operational recommendations for this 7.07-million-object bucket
 
 1. Confirm the target account and COS CRN immediately before execution.
 2. Capture bucket location, versioning, lifecycle, retention, replication, and dependency information.
@@ -578,7 +543,7 @@ Look for retention, legal hold, malformed key handling, authorization, endpoint,
 12. Perform a separate version/delete-marker assessment if versioning is enabled.
 13. Confirm no objects are being recreated before considering bucket deletion.
 
-## 20. Change record checklist
+## 19. Change record checklist
 
 Before execution:
 
@@ -607,14 +572,14 @@ After execution:
 - [ ] Logs attached to the change record.
 - [ ] Bucket deletion performed only if separately approved.
 
-## 21. Official references
+## 20. Official references
 
 - [IBM Cloud Object Storage CLI documentation](https://cloud.ibm.com/docs/cloud-object-storage?topic=cloud-object-storage-ic-cos-cli)
 - [IBM Cloud Object Storage: Emptying a bucket](https://cloud.ibm.com/docs/cloud-object-storage?topic=cloud-object-storage-deleting-multiple-objects-patterns)
 - [IBM Cloud Object Storage CLI plug-in repository](https://github.com/IBM/ibmcloud-cos-cli)
 - [IBM Cloud Object Storage documentation](https://cloud.ibm.com/docs/cloud-object-storage/)
 
-## 22. Scope limitations
+## 21. Scope limitations
 
 This implementation is designed for paginated deletion of current objects through the IBM Cloud COS CLI. It is not, by itself, a complete solution for:
 
